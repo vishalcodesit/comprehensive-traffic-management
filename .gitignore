@@ -1,0 +1,20 @@
+.venv/
+__pycache__/
+*.pyc
+data/raw/
+data/processed/*.npz
+data/processed/*.pkl
+data/synthetic/*.mp4
+data/samples/*.webm
+models/*.pt
+results/*.png
+!results/sample_detection_frame.png
+results/*.json
+results/*.mp4
+*.egg-info/
+.ipynb_checkpoints/
+.pytest_cache/
+yolov8n.pt
+
+# Keep: data/samples/*.png (small extracted vehicle-crop templates --
+# reproducible via extract_car_templates.py, but cheap to just track).

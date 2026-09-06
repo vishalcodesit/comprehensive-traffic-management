@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Comprehensive Traffic Management System</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+  <header>
+    <h1>Comprehensive Traffic Management System</h1>
+    <p class="subtitle">ML-driven congestion forecasting &middot; priority-vehicle detection &middot; adaptive signal control</p>
+  </header>
+
+  <div id="emergency-banner" class="hidden">🚨 EMERGENCY VEHICLE DETECTED — <span id="emergency-zone"></span> approach preempted</div>
+
+  <main>
+    <div class="video-column">
+      <section class="panel video-panel">
+        <h2>Live Traffic Feed <span class="badge">YOLOv8 + DeepSORT</span></h2>
+        <img id="video-feed" src="/video_feed" alt="live detection feed">
+        <p class="hint">Real intersection footage (CC BY-SA 4.0, Thomas1313 / Wikimedia Commons) &mdash; genuine YOLOv8 vehicle detections, not staged.</p>
+      </section>
+
+      <section class="panel video-panel">
+        <h2>Emergency Detection Demo <span class="badge">Siren-flicker heuristic</span></h2>
+        <img id="video-feed-emergency" src="/video_feed_emergency" alt="emergency detection demo feed">
+        <p class="hint">Deterministic synthetic clip: a COCO-pretrained YOLOv8 won't reliably fire on flat-shaded synthetic renders, so this feed exists purely to guarantee an "ambulance" (strobing red/blue roof light bar) passes through on cue and to demonstrate signal preemption.</p>
+      </section>
+    </div>
+
+    <section class="side-column">
+      <div class="panel">
+        <h2>Congestion Forecast <span class="badge">LSTM</span></h2>
+        <div id="forecast-level" class="level-badge level-Low">—</div>
+        <p class="hint">Forecast on real I-94 historical traffic windows (UCI Metro Interstate Traffic Volume dataset), refreshed continuously.</p>
+      </div>
+
+      <div class="panel">
+        <h2>Adaptive Signal Control <span class="badge">DQN</span></h2>
+        <div id="intersection">
+          <div class="approach" id="approach-North"><span class="label">N</span><div class="bar"><div class="fill"></div></div><span class="count">0</span></div>
+          <div class="approach" id="approach-East"><span class="label">E</span><div class="bar"><div class="fill"></div></div><span class="count">0</span></div>
+          <div class="approach" id="approach-South"><span class="label">S</span><div class="bar"><div class="fill"></div></div><span class="count">0</span></div>
+          <div class="approach" id="approach-West"><span class="label">W</span><div class="bar"><div class="fill"></div></div><span class="count">0</span></div>
+          <div class="hub" id="hub">•</div>
+        </div>
+        <p id="decision-reason" class="hint mono">waiting for models…</p>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>BCSE 497J — Project-I &middot; Comprehensive Traffic Management Using Machine Learning Techniques</p>
+  </footer>
+
+  <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+</body>
+</html>
