@@ -98,9 +98,9 @@ From the actual training/evaluation run used to build this repo (RTX 4050 laptop
 
 | Metric | DQN adaptive | Fixed-time | Improvement |
 |---|---|---|---|
-| Avg. queue length/step | 20.1 vehicles | 33.8 vehicles | **-40.4%** |
-| Throughput | 560.5 veh/episode | 522.3 veh/episode | **+7.3%** |
-| Avg. emergency-vehicle wait/step | 0.027 | 0.078 | **-65.4%** |
+| Avg. queue length/step | 19.9 vehicles | 33.8 vehicles | **-41.2%** |
+| Throughput | 563.6 veh/episode | 522.3 veh/episode | **+7.9%** |
+| Avg. emergency-vehicle wait/step | 0.025 | 0.078 | **-68.6%** |
 
 Plots: `congestion_training_curves.png`, `congestion_pred_vs_actual.png`,
 `congestion_confusion_matrix.png`, `rl_training_curves.png`,

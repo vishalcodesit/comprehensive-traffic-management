@@ -103,3 +103,26 @@ def test_congestion_preprocess_helpers():
     df, thresholds = add_congestion_labels(df)
     assert df["congestion_level"].between(0, 3).all()
     assert len(thresholds) == 3
+
+
+def test_rejected_switch_still_advances_phase_clock():
+    """Repeatedly requesting a switch before min-green (as the emergency
+    override does) must eventually be honoured, not deadlock."""
+    from src.signal_control.intersection_env import IntersectionEnv
+
+    env = IntersectionEnv(emergency_prob=0.0)
+    env.reset(seed=0)
+    env.step(1)  # switch to East: phase clock restarts
+    for _ in range(env.min_green + 1):
+        env.step(3)
+    assert env.current_phase == 3
+
+
+def test_lane_zones_cover_all_four_lanes():
+    from src.detection.synthetic_video import lane_zones, LANES, WIDTH
+
+    zones = lane_zones()
+    for i, x in enumerate(LANES):
+        frac = x / WIDTH
+        hits = [name for name, lo, hi in zones if lo <= frac < hi]
+        assert hits == [f"approach_{i + 1}"]

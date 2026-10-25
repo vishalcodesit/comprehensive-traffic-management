@@ -151,9 +151,9 @@ traffic):
 
 | Metric | DQN adaptive | Fixed-time | Improvement |
 |---|---|---|---|
-| Avg. queue length/step | 20.1 vehicles | 33.8 vehicles | **-40.4%** |
-| Throughput | 560.5 veh/episode | 522.3 veh/episode | **+7.3%** |
-| Avg. emergency-vehicle wait/step | 0.027 | 0.078 | **-65.4%** |
+| Avg. queue length/step | 19.9 vehicles | 33.8 vehicles | **-41.2%** |
+| Throughput | 563.6 veh/episode | 522.3 veh/episode | **+7.9%** |
+| Avg. emergency-vehicle wait/step | 0.025 | 0.078 | **-68.6%** |
 
 This reproduces the literature's headline finding (RL-based adaptive control
 beats fixed-time on queue length and emissions-correlated metrics) on this

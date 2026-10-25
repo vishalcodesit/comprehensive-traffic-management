@@ -68,7 +68,13 @@ class EmergencyCNN:
             self.device = "cuda" if torch.cuda.is_available() else "cpu"
             net = models.mobilenet_v3_small(weights=None)
             net.classifier[-1] = torch.nn.Linear(net.classifier[-1].in_features, 2)
-            state = torch.load(ckpt_path, map_location=self.device)
+            ckpt = torch.load(ckpt_path, map_location=self.device)
+            if "model_state" in ckpt:
+                state, self.emergency_idx = ckpt["model_state"], ckpt["emergency_idx"]
+            else:
+                # Legacy bare state_dict: ImageFolder's alphabetical order
+                # puts 'emergency' at index 0.
+                state, self.emergency_idx = ckpt, 0
             net.load_state_dict(state)
             net.eval().to(self.device)
             self.model = net
@@ -85,7 +91,7 @@ class EmergencyCNN:
         x = self.transform(rgb).unsqueeze(0).to(self.device)
         with self.torch.no_grad():
             logits = self.model(x)
-            prob = self.torch.softmax(logits, dim=-1)[0, 1].item()
+            prob = self.torch.softmax(logits, dim=-1)[0, self.emergency_idx].item()
         return prob
 
 

@@ -52,8 +52,11 @@ def run(epochs=10, batch_size=32, lr=1e-4):
     train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True)
     val_loader = DataLoader(val_ds, batch_size=batch_size)
 
-    print(f"Classes: {train_ds.classes} (index 1 must be 'normal' > "
-          f"'emergency' alphabetically is index 0 -- emergency_classifier.py assumes index 1 = emergency)")
+    # ImageFolder indexes classes alphabetically ('emergency'=0, 'normal'=1);
+    # the index is saved in the checkpoint so emergency_classifier.py never
+    # has to assume it.
+    emergency_idx = train_ds.class_to_idx["emergency"]
+    print(f"Classes: {train_ds.class_to_idx}")
 
     net = models.mobilenet_v3_small(weights=models.MobileNet_V3_Small_Weights.DEFAULT)
     for p in net.features.parameters():
@@ -86,7 +89,7 @@ def run(epochs=10, batch_size=32, lr=1e-4):
         print(f"Epoch {epoch}/{epochs}  val_acc={acc:.3f}")
         if acc > best_acc:
             best_acc = acc
-            torch.save(net.state_dict(), OUT_PATH)
+            torch.save({"model_state": net.state_dict(), "emergency_idx": emergency_idx}, OUT_PATH)
 
     print(f"Best val_acc={best_acc:.3f}. Saved to {OUT_PATH}")
 

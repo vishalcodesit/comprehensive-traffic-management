@@ -29,6 +29,17 @@ import config
 
 WIDTH, HEIGHT = 960, 540
 FPS = 20
+LANES = (280, 400, 560, 680)
+
+
+def lane_zones(lanes=LANES):
+    """VideoPipeline zones with one zone per lane (boundaries at lane
+    midpoints), so each lane maps to its own approach. The pipeline's default
+    equal-quarter split would put all four lanes into only the middle two
+    zones, since the road occupies the centre of the frame."""
+    fracs = [x / WIDTH for x in lanes]
+    edges = [0.0] + [(a + b) / 2 for a, b in zip(fracs, fracs[1:])] + [1.0]
+    return [(f"approach_{i + 1}", lo, hi) for i, (lo, hi) in enumerate(zip(edges, edges[1:]))]
 
 
 def _load_templates():
@@ -121,7 +132,7 @@ class _Car:
                 cv2.rectangle(frame, (bx1, by1), (bx2, by2), color, -1)
 
 
-def generate(path=None, seconds=20, lanes=(280, 400, 560, 680), seed=7):
+def generate(path=None, seconds=20, lanes=LANES, seed=7):
     path = path or os.path.join(config.SYNTHETIC_DATA_DIR, "demo_traffic.mp4")
     random.seed(seed)
     np.random.seed(seed)

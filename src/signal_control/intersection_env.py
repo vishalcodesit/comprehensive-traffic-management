@@ -89,7 +89,11 @@ class IntersectionEnv(gym.Env):
 
         if action != self.current_phase:
             if self.time_in_phase < self.min_green:
-                invalid_switch = True  # ignored: keep current phase
+                # Ignored: keep current phase. The phase clock must still
+                # advance, otherwise a controller that keeps requesting the
+                # switch (e.g. the emergency override) deadlocks forever.
+                invalid_switch = True
+                self.time_in_phase += 1
             else:
                 self.current_phase = action
                 self.time_in_phase = 0
