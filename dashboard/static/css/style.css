@@ -81,6 +81,38 @@ main {
   display: block;
   background: #000;
 }
+.lane-strip {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-top: 10px;
+}
+.lane-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 6px;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--border);
+  transition: background 0.2s, border-color 0.2s;
+}
+.lane-name { font-size: 0.72rem; color: var(--muted); }
+.lane-count { font-size: 1.5rem; font-weight: 700; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.lane-unit { font-size: 0.68rem; color: var(--muted); }
+.lane-priority {
+  visibility: hidden;
+  margin-top: 4px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: white;
+  background: var(--severe);
+  padding: 1px 6px;
+  border-radius: 999px;
+}
+.lane-card.priority { background: rgba(231,76,60,0.18); border-color: var(--severe); }
+.lane-card.priority .lane-priority { visibility: visible; }
+
 .hint { color: var(--muted); font-size: 0.78rem; margin: 10px 0 0; line-height: 1.4; }
 .mono { font-family: "Cascadia Code", Consolas, monospace; }
 
@@ -134,4 +166,7 @@ footer { text-align: center; color: var(--muted); font-size: 0.75rem; padding: 1
 
 @media (max-width: 900px) {
   main { grid-template-columns: 1fr; }
+}
+@media (max-width: 480px) {
+  .lane-strip { grid-template-columns: repeat(2, 1fr); }
 }

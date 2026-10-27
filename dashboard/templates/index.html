@@ -18,12 +18,14 @@
       <section class="panel video-panel">
         <h2>Live Traffic Feed <span class="badge">YOLOv8 + DeepSORT</span></h2>
         <img id="video-feed" src="/video_feed" alt="live detection feed">
+        <div class="lane-strip" id="lanes-real" aria-live="polite"></div>
         <p class="hint">Real intersection footage (CC BY-SA 4.0, Thomas1313 / Wikimedia Commons) &mdash; genuine YOLOv8 vehicle detections, not staged.</p>
       </section>
 
       <section class="panel video-panel">
         <h2>Emergency Detection Demo <span class="badge">Siren-flicker heuristic</span></h2>
         <img id="video-feed-emergency" src="/video_feed_emergency" alt="emergency detection demo feed">
+        <div class="lane-strip" id="lanes-emergency_demo" aria-live="polite"></div>
         <p class="hint">Deterministic synthetic clip: a COCO-pretrained YOLOv8 won't reliably fire on flat-shaded synthetic renders, so this feed exists purely to guarantee an "ambulance" (strobing red/blue roof light bar) passes through on cue and to demonstrate signal preemption.</p>
       </section>
     </div>
