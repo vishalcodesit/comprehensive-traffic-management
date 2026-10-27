@@ -34,7 +34,51 @@ function renderLanes(feed, lanes) {
   });
 }
 
+function renderForecast(rows) {
+  const body = document.getElementById("forecast-horizons");
+  if (!body || !rows || !rows.length) return;
+  body.innerHTML = rows.map((r) => `
+    <tr>
+      <td class="horizon">+${r.hours} h</td>
+      <td class="volume">${r.volume.toLocaleString()} <span class="unit">veh/hr</span></td>
+      <td><span class="level-pill level-${r.level}">${r.level}</span>
+          <span class="confidence">${Math.round(r.confidence * 100)}%</span></td>
+    </tr>`).join("");
+}
+
+function renderLaneForecast(rows) {
+  if (!rows || !rows.length) return;
+  const cards = document.querySelectorAll("#busiest-lanes .busiest-card");
+  rows.forEach((r, i) => {
+    if (!cards[i]) return;
+    const busiest = r.busiest || [];
+    const lane = busiest.length ? r.lanes[busiest[0]] : null;  // tied lanes share a level
+    cards[i].querySelector(".busiest-lane").textContent =
+      !busiest.length ? "no traffic yet"
+      : busiest.length === APPROACHES.length ? "All lanes even"
+      : busiest.join(" / ");
+    const levelEl = cards[i].querySelector(".busiest-level");
+    levelEl.textContent = lane ? lane.level : "";
+    levelEl.className = "busiest-level level-pill " + (lane ? "level-" + lane.level : "");
+  });
+
+  document.getElementById("lane-forecast").innerHTML = APPROACHES.map((name) => `
+    <tr>
+      <td class="horizon">${name}</td>
+      ${rows.map((r) => {
+        const lane = r.lanes[name];
+        const busiest = (r.busiest || []).includes(name) && r.busiest.length < APPROACHES.length ? " busiest" : "";
+        return `<td class="lane-cell${busiest}">
+          <span class="level-pill level-${lane.level}">${lane.level}</span>
+          <span class="unit">${lane.volume.toLocaleString()} veh/hr</span></td>`;
+      }).join("")}
+    </tr>`).join("");
+}
+
 function render(state) {
+  renderForecast(state.signal && state.signal.forecast);
+  renderLaneForecast(state.signal && state.signal.lane_forecast);
+
   Object.entries(state.lanes || {}).forEach(([feed, lanes]) => renderLanes(feed, lanes));
 
   const banner = document.getElementById("emergency-banner");

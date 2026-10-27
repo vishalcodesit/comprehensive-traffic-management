@@ -34,7 +34,29 @@
       <div class="panel">
         <h2>Congestion Forecast <span class="badge">LSTM</span></h2>
         <div id="forecast-level" class="level-badge level-Low">—</div>
-        <p class="hint">Forecast on real I-94 historical traffic windows (UCI Metro Interstate Traffic Volume dataset), refreshed continuously.</p>
+        <table class="horizon-table">
+          <thead><tr><th>Ahead</th><th>Predicted traffic</th><th>Level</th></tr></thead>
+          <tbody id="forecast-horizons">
+            <tr><td colspan="3" class="muted">waiting for forecast…</td></tr>
+          </tbody>
+        </table>
+        <p class="hint">Big badge = the +1&nbsp;h level, which biases the signal controller. Percent = the model's confidence in that level. Forecast on real I-94 historical traffic windows (UCI Metro Interstate Traffic Volume dataset), refreshed continuously.</p>
+      </div>
+
+      <div class="panel">
+        <h2>Lane Congestion Forecast <span class="badge">LSTM &times; lane share</span></h2>
+        <div class="busiest-row" id="busiest-lanes">
+          <div class="busiest-card"><span class="busiest-h">+1 h</span><span class="busiest-lane">—</span><span class="busiest-level"></span></div>
+          <div class="busiest-card"><span class="busiest-h">+3 h</span><span class="busiest-lane">—</span><span class="busiest-level"></span></div>
+          <div class="busiest-card"><span class="busiest-h">+6 h</span><span class="busiest-lane">—</span><span class="busiest-level"></span></div>
+        </div>
+        <table class="horizon-table lane-forecast-table">
+          <thead><tr><th>Lane</th><th>+1 h</th><th>+3 h</th><th>+6 h</th></tr></thead>
+          <tbody id="lane-forecast">
+            <tr><td colspan="4" class="muted">waiting for forecast…</td></tr>
+          </tbody>
+        </table>
+        <p class="hint">Top: the lane expected to be most congested at each horizon. The LSTM forecasts the whole road; each lane gets its share based on the traffic split the live camera has seen over the last ~10&nbsp;s.</p>
       </div>
 
       <div class="panel">

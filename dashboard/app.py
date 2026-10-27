@@ -59,7 +59,11 @@ app = Flask(__name__)
 
 STATE_LOCK = threading.Lock()
 STATE = {
-    "real_feed": {"n_vehicles": 0, "zone_counts": {name: 0.0 for name in APPROACH_NAMES}},
+    "real_feed": {
+        "n_vehicles": 0,
+        "zone_counts": {name: 0.0 for name in APPROACH_NAMES},   # fast EMA: signal decisions
+        "lane_traffic": {name: 0.0 for name in APPROACH_NAMES},  # slow EMA: each lane's share of traffic
+    },
     "emergency": {"detected": False, "zone": None, "score": 0.0},
     # Live per-lane status for each feed: {lane: {"count": int, "priority": bool}}.
     "lanes": {
@@ -71,7 +75,10 @@ STATE = {
         "chosen_approach": None,
         "reason": "",
         "forecast_level": "Low",
-        "predicted_volume": None,
+        # LSTM forecast per horizon: [{"hours", "volume", "level", "confidence"}, ...]
+        "forecast": [],
+        # Per-lane forecast per horizon: [{"hours", "busiest": [lanes], "lanes": {lane: {"volume", "share", "level"}}}, ...]
+        "lane_forecast": [],
         "history": [],  # list of {step, queues:{...}, chosen_approach}
     },
     "models_ready": False,
@@ -82,6 +89,38 @@ MAX_HISTORY = 60
 # --------------------------------------------------------------------------
 # Background digital-twin loop: real trained LSTM + real trained DQN.
 # --------------------------------------------------------------------------
+def _forecast_by_horizon(forecast):
+    """Reshapes CongestionPredictor output into one row per horizon for the
+    dashboard: predicted volume, level, and the model's probability for it."""
+    return [
+        {"hours": h, "volume": round(v), "level": lvl, "confidence": round(float(max(p)), 3)}
+        for h, v, lvl, p in zip(forecast["horizons_hours"], forecast["predicted_volume"],
+                                forecast["predicted_level"], forecast["level_probabilities"])
+    ]
+
+
+def _lane_forecast(forecast, lane_traffic, thresholds):
+    """Splits the LSTM's road-level volume forecast across lanes by each
+    lane's observed share of traffic. A lane's level is judged as if the
+    whole road carried traffic at that lane's density (volume / share of an
+    even split), so an evenly loaded road gives every lane the road's level
+    and a lane carrying half the traffic is rated as twice as loaded."""
+    traffic = np.array([lane_traffic[name] for name in APPROACH_NAMES], dtype=np.float64)
+    shares = traffic / traffic.sum() if traffic.sum() > 0 else np.full(len(APPROACH_NAMES), 1 / len(APPROACH_NAMES))
+    rows = []
+    for h, total in zip(forecast["horizons_hours"], forecast["predicted_volume"]):
+        lanes = {}
+        for name, share in zip(APPROACH_NAMES, shares):
+            density_volume = total * share * len(APPROACH_NAMES)
+            level = config.CONGESTION_LEVELS[int(np.searchsorted(thresholds, density_volume, side="left"))]
+            lanes[name] = {"volume": round(total * share), "share": round(float(share), 3), "level": level}
+        # Every lane tied for the largest share (empty until traffic is seen).
+        busiest = ([name for name, share in zip(APPROACH_NAMES, shares) if np.isclose(share, shares.max())]
+                   if traffic.sum() > 0 else [])
+        rows.append({"hours": h, "busiest": busiest, "lanes": lanes})
+    return rows
+
+
 def signal_loop():
     if not (os.path.exists(config.RL_MODEL_PATH) and os.path.exists(config.CONGESTION_MODEL_PATH)):
         print("[signal_loop] Trained models missing -- signal panel will stay idle. "
@@ -91,7 +130,9 @@ def signal_loop():
     agent = DQNAgent.load(config.RL_MODEL_PATH)
     engine = DecisionEngine(agent)
     predictor = CongestionPredictor()
-    test_data = np.load(config.PROCESSED_NPZ, allow_pickle=True)["X_test"]
+    processed = np.load(config.PROCESSED_NPZ, allow_pickle=True)
+    test_data = processed["X_test"]
+    level_thresholds = processed["congestion_thresholds"]  # Low/Medium/High/Severe cut points, veh/hr
     cursor = 0
 
     # emergency_prob=0 disables the env's own internal random test-emergency
@@ -123,6 +164,13 @@ def signal_loop():
             cursor += 1
             forecast = predictor.predict(window)
             forecast_level = forecast["predicted_level"][0]
+            horizons = _forecast_by_horizon(forecast)
+            with STATE_LOCK:
+                lane_traffic = dict(STATE["real_feed"]["lane_traffic"])
+            lane_forecast = _lane_forecast(forecast, lane_traffic, level_thresholds)
+            with STATE_LOCK:
+                STATE["signal"]["forecast"] = horizons
+                STATE["signal"]["lane_forecast"] = lane_forecast
             zone_counts = {name: float(q) for name, q in zip(APPROACH_NAMES, env.queues)}
             congestion_bias = engine.congestion_levels_from_forecast(forecast_level, zone_counts)
 
@@ -214,6 +262,7 @@ class FeedWorker:
 
 
 ZONE_COUNT_EMA_ALPHA = 0.3  # smooths frame-to-frame detector jitter for display + decisions
+LANE_SHARE_EMA_ALPHA = 0.005  # ~10 s memory at 20 fps: each lane's typical share, not a passing car
 
 
 def _lane_status(summary):
@@ -227,8 +276,10 @@ def _on_real_summary(summary):
         STATE["real_feed"]["n_vehicles"] = summary["n_vehicles"]
         STATE["lanes"]["real"] = _lane_status(summary)
         zc = STATE["real_feed"]["zone_counts"]
+        lt = STATE["real_feed"]["lane_traffic"]
         for approach, count in summary["zone_counts"].items():
             zc[approach] = (1 - ZONE_COUNT_EMA_ALPHA) * zc.get(approach, 0.0) + ZONE_COUNT_EMA_ALPHA * count
+            lt[approach] = (1 - LANE_SHARE_EMA_ALPHA) * lt.get(approach, 0.0) + LANE_SHARE_EMA_ALPHA * count
 
 
 def _on_emergency_summary(summary):
