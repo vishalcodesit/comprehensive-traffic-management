@@ -97,11 +97,18 @@ class EmergencyCNN:
 
 class EmergencyVehicleDetector:
     def __init__(self, history_len=15, min_frames=6, flicker_weight=0.5,
-                 marking_weight=0.2, cnn_weight=0.3, threshold=0.55):
+                 marking_weight=0.2, cnn_weight=0.3, threshold=0.55,
+                 min_flash=0.25, full_flicker_swings=4, min_flicker=0.75,
+                 roof_extend=0.3, cnn_confident=0.9):
         self.history = defaultdict(lambda: deque(maxlen=history_len))
         self.min_frames = min_frames
         self.weights = (flicker_weight, marking_weight, cnn_weight)
         self.threshold = threshold
+        self.min_flash = min_flash                      # min share of the roof region a lit light must cover
+        self.full_flicker_swings = full_flicker_swings  # on<->off swings in the window for flicker = 1.0
+        self.roof_extend = roof_extend                  # roof band reaches this fraction of box height above it
+        self.min_flicker = min_flicker
+        self.cnn_confident = cnn_confident
         self.cnn = EmergencyCNN()
 
     def _crop(self, frame, bbox):
@@ -111,8 +118,11 @@ class EmergencyVehicleDetector:
         if x2 <= x1 or y2 <= y1:
             return None, None
         full = frame[y1:y2, x1:x2]
+        # Light bars sit on top of the roof and detectors often leave them
+        # out of the vehicle box, so the roof band extends above the box.
         roof_h = max(1, int((y2 - y1) * 0.35))
-        roof = frame[y1:y1 + roof_h, x1:x2]
+        roof_top = max(0, y1 - int((y2 - y1) * self.roof_extend))
+        roof = frame[roof_top:y1 + roof_h, x1:x2]
         return full, roof
 
     def _marking_score(self, full_crop):
@@ -128,23 +138,38 @@ class EmergencyVehicleDetector:
         )) / hsv.shape[0] / hsv.shape[1]
         return float(np.clip(edge_density * 2.0 + red_ratio * 1.5 + white_ratio * 0.8, 0, 1))
 
+    def _swings(self, series):
+        """Counts on<->off flashes of one colour's share of the roof region.
+        A strobe repeatedly drops to near zero and comes back; a red car's
+        roof only drifts up and down while staying lit, so 'on' and 'off'
+        are judged relative to the window's own peak (with hysteresis), and
+        a colour that never covers min_flash of the region isn't a light."""
+        peak = series.max()
+        if peak < self.min_flash:
+            return 0
+        on, off = peak * 0.6, peak * 0.25
+        state, swings = 0, 0
+        for v in series:
+            s = 1 if v >= on else (-1 if v <= off else 0)
+            if s and s != state:
+                swings += state != 0
+                state = s
+        return swings
+
     def _flicker_score(self, track_id, roof_crop):
         if roof_crop is None or roof_crop.size == 0:
             return 0.0
         hsv = cv2.cvtColor(roof_crop, cv2.COLOR_BGR2HSV)
-        red_ratio, blue_ratio = _color_ratios(hsv)
-        signal = red_ratio + blue_ratio
         hist = self.history[track_id]
-        hist.append(signal)
+        hist.append(_color_ratios(hsv))  # (red_ratio, blue_ratio)
         if len(hist) < self.min_frames:
             return 0.0
         arr = np.array(hist)
-        # Normalized variance: a strobing light bar oscillates strongly frame
-        # to frame; a static-colored roof stays near-constant.
-        variance = float(np.var(arr))
-        zero_crossings = np.sum(np.abs(np.diff(np.sign(arr - arr.mean()))) > 0)
-        flicker = np.clip(variance * 40 + zero_crossings / len(hist), 0, 1)
-        return float(flicker)
+        # A strobing light bar repeatedly swings its red and/or blue share of
+        # the roof far up and down (alternating red/blue, or one colour
+        # flashing on/off); a static roof -- even a red one -- does not.
+        swings = max(self._swings(arr[:, 0]), self._swings(arr[:, 1]))
+        return float(np.clip(swings / self.full_flicker_swings, 0, 1))
 
     def evaluate(self, frame, track):
         """track: {"track_id", "bbox", "class_name"}. Returns augmented dict with
@@ -153,13 +178,23 @@ class EmergencyVehicleDetector:
         full_crop, roof_crop = self._crop(frame, track["bbox"])
         flicker = self._flicker_score(track["track_id"], roof_crop)
         marking = self._marking_score(full_crop)
-        cnn_score = self.cnn.score(full_crop) if full_crop is not None else 0.5
 
         w_flicker, w_marking, w_cnn = self.weights
-        score = w_flicker * flicker + w_marking * marking + w_cnn * cnn_score
+        if self.cnn.available:
+            cnn_score = self.cnn.score(full_crop) if full_crop is not None else 0.0
+            score = w_flicker * flicker + w_marking * marking + w_cnn * cnn_score
+            cnn_confident = cnn_score >= self.cnn_confident
+        else:
+            # No CNN: renormalize over the heuristics instead of crediting
+            # every vehicle a free "neutral" CNN score.
+            score = (w_flicker * flicker + w_marking * marking) / (w_flicker + w_marking)
+            cnn_confident = False
         enough_evidence = len(self.history[track["track_id"]]) >= self.min_frames
+        # Livery alone matches every white van and red car, so a vehicle is
+        # only flagged with flashing-light evidence (or a confident CNN).
+        has_primary_evidence = flicker >= self.min_flicker or cnn_confident
 
         out = dict(track)
         out["emergency_score"] = round(float(score), 3)
-        out["is_emergency"] = bool(enough_evidence and score >= self.threshold)
+        out["is_emergency"] = bool(enough_evidence and has_primary_evidence and score >= self.threshold)
         return out

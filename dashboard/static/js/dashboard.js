@@ -13,7 +13,30 @@ async function poll() {
   }
 }
 
+function renderLanes(feed, lanes) {
+  const strip = document.getElementById("lanes-" + feed);
+  if (!strip || !lanes) return;
+  if (!strip.children.length) {
+    strip.innerHTML = APPROACHES.map((name) => `
+      <div class="lane-card" data-lane="${name}">
+        <span class="lane-name">${name} lane</span>
+        <span class="lane-count">0</span>
+        <span class="lane-unit">vehicles</span>
+        <span class="lane-priority">PRIORITY VEHICLE</span>
+      </div>`).join("");
+  }
+  APPROACHES.forEach((name) => {
+    const lane = lanes[name] || { count: 0, priority: false };
+    const card = strip.querySelector(`[data-lane="${name}"]`);
+    card.querySelector(".lane-count").textContent = lane.count;
+    card.querySelector(".lane-unit").textContent = lane.count === 1 ? "vehicle" : "vehicles";
+    card.classList.toggle("priority", lane.priority);
+  });
+}
+
 function render(state) {
+  Object.entries(state.lanes || {}).forEach(([feed, lanes]) => renderLanes(feed, lanes));
+
   const banner = document.getElementById("emergency-banner");
   const emg = state.emergency || {};
   if (emg.detected) {

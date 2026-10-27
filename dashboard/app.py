@@ -47,7 +47,7 @@ from flask import Flask, Response, jsonify, render_template
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import config
-from src.detection.video_pipeline import VideoPipeline
+from src.detection.video_pipeline import VideoPipeline, DEFAULT_ZONES
 from src.detection.synthetic_video import generate as generate_demo_video, lane_zones
 from src.detection.download_sample_video import download as download_sample_video
 from src.signal_control.intersection_env import IntersectionEnv, APPROACH_NAMES
@@ -61,6 +61,11 @@ STATE_LOCK = threading.Lock()
 STATE = {
     "real_feed": {"n_vehicles": 0, "zone_counts": {name: 0.0 for name in APPROACH_NAMES}},
     "emergency": {"detected": False, "zone": None, "score": 0.0},
+    # Live per-lane status for each feed: {lane: {"count": int, "priority": bool}}.
+    "lanes": {
+        feed: {name: {"count": 0, "priority": False} for name in APPROACH_NAMES}
+        for feed in ("real", "emergency_demo")
+    },
     "signal": {
         "queues": {name: 0 for name in APPROACH_NAMES},
         "chosen_approach": None,
@@ -211,28 +216,33 @@ class FeedWorker:
 ZONE_COUNT_EMA_ALPHA = 0.3  # smooths frame-to-frame detector jitter for display + decisions
 
 
+def _lane_status(summary):
+    """Per-lane live vehicle count + priority-vehicle flag for the lane panels."""
+    return {name: {"count": summary["zone_counts"][name], "priority": summary["zone_emergency"][name]}
+            for name in APPROACH_NAMES}
+
+
 def _on_real_summary(summary):
     with STATE_LOCK:
         STATE["real_feed"]["n_vehicles"] = summary["n_vehicles"]
+        STATE["lanes"]["real"] = _lane_status(summary)
         zc = STATE["real_feed"]["zone_counts"]
-        for zone_name, count in summary["zone_counts"].items():
-            approach = _zone_to_approach(zone_name)
+        for approach, count in summary["zone_counts"].items():
             zc[approach] = (1 - ZONE_COUNT_EMA_ALPHA) * zc.get(approach, 0.0) + ZONE_COUNT_EMA_ALPHA * count
 
 
 def _on_emergency_summary(summary):
     zone = next((z for z, v in summary["zone_emergency"].items() if v), None)
     with STATE_LOCK:
+        STATE["lanes"]["emergency_demo"] = _lane_status(summary)
         STATE["emergency"]["detected"] = summary["any_emergency"]
-        STATE["emergency"]["zone"] = _zone_to_approach(zone)
+        STATE["emergency"]["zone"] = zone
 
 
-def _zone_to_approach(zone_name):
-    """Maps video_pipeline's approach_1..4 zones onto the intersection's N/E/S/W naming."""
-    if zone_name is None:
-        return None
-    mapping = {"approach_1": "North", "approach_2": "East", "approach_3": "South", "approach_4": "West"}
-    return mapping.get(zone_name, zone_name)
+def _as_approaches(zones):
+    """Renames a 4-zone split to the intersection's N/E/S/W approaches, so the
+    video overlay, lane panels and signal panel all use the same names."""
+    return [(APPROACH_NAMES[i], lo, hi) for i, (_, lo, hi) in enumerate(zones)]
 
 
 def _prepare_real_clip():
@@ -248,10 +258,11 @@ def _prepare_emergency_clip():
     return video_path
 
 
-REAL_FEED = FeedWorker(_prepare_real_clip, _on_real_summary, "REAL FEED")
+REAL_FEED = FeedWorker(_prepare_real_clip, _on_real_summary, "REAL FEED",
+                       zones=_as_approaches(DEFAULT_ZONES))
 # One zone per synthetic lane, so emergencies can preempt all four approaches.
 EMERGENCY_FEED = FeedWorker(_prepare_emergency_clip, _on_emergency_summary,
-                            "EMERGENCY-DETECTION DEMO", zones=lane_zones())
+                            "EMERGENCY-DETECTION DEMO", zones=_as_approaches(lane_zones()))
 
 
 @app.route("/")

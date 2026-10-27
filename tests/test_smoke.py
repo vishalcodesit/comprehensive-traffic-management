@@ -126,3 +126,31 @@ def test_lane_zones_cover_all_four_lanes():
         frac = x / WIDTH
         hits = [name for name, lo, hi in zones if lo <= frac < hi]
         assert hits == [f"approach_{i + 1}"]
+
+
+def test_flicker_ignores_steady_and_noisy_roofs():
+    """A red car's roof drifting while staying lit, or a few noisy red
+    pixels, must not count as a strobing light bar; a real strobe must."""
+    from src.detection.emergency_classifier import EmergencyVehicleDetector
+
+    det = EmergencyVehicleDetector()
+    red_car = np.array([0.42, 0.35, 0.49, 0.36, 0.47, 0.33, 0.50, 0.37, 0.46, 0.34, 0.48, 0.35])
+    noise = np.array([0.08, 0.02, 0.10, 0.01, 0.14, 0.00, 0.09, 0.02, 0.12, 0.01, 0.10, 0.03])
+    strobe = np.array([0.5, 0.5, 0.5, 0.0, 0.0, 0.0, 0.5, 0.5, 0.5, 0.0, 0.0, 0.0, 0.5, 0.5, 0.5])
+    assert det._swings(red_car) == 0
+    assert det._swings(noise) == 0
+    assert det._swings(strobe) >= det.full_flicker_swings
+
+
+def test_lane_overlay_marks_priority_lane():
+    from src.detection.video_pipeline import draw_lane_overlay, DEFAULT_ZONES
+
+    frame = np.zeros((480, 854, 3), dtype=np.uint8)
+    names = [name for name, _, _ in DEFAULT_ZONES]
+    counts = {n: i for i, n in enumerate(names)}
+    priority = {n: n == names[2] for n in names}
+    draw_lane_overlay(frame, DEFAULT_ZONES, counts, priority)
+
+    pure_red = (frame[..., 2] == 255) & (frame[..., 0] == 0) & (frame[..., 1] == 0)
+    xs = np.where(pure_red)[1]
+    assert xs.size and 0.5 * 854 <= xs.min() and xs.max() < 0.75 * 854  # only the priority lane's label
