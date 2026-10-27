@@ -102,7 +102,10 @@ class _Car:
         self.frame_count = 0
 
         template = AMBULANCE_TEMPLATE if is_emergency else random.choice(TRAFFIC_TEMPLATES)
-        target_w = random.randint(56, 74)
+        # Ambulances are bigger than cars -- and the ambulance base crop is
+        # only reliably YOLO-detectable from ~70px wide, so drawing it at
+        # car size made it vanish from detection (and thus from tracking).
+        target_w = random.randint(80, 92) if is_emergency else random.randint(56, 74)
         scale = target_w / template.shape[1]
         target_h = max(1, int(template.shape[0] * scale))
         self.img = cv2.resize(template, (target_w, target_h))
@@ -126,8 +129,11 @@ class _Car:
             # heuristic (which watches red/blue ratio oscillation) fires.
             on_red = (self.frame_count // 3) % 2 == 0
             color = (0, 0, 255) if on_red else (255, 60, 0)
+            # Mounted on top of the vehicle like a real light bar. Painting
+            # it over the car photo hid the windows/roofline YOLO relies on,
+            # so it lost the ambulance after a few frames.
             bx1, bx2 = max(0, x1 + 3), min(WIDTH, x2 - 3)
-            by1, by2 = max(0, y1), min(HEIGHT, y1 + bar_h)
+            by1, by2 = max(0, y1 - bar_h), min(HEIGHT, y1)
             if bx2 > bx1 and by2 > by1:
                 cv2.rectangle(frame, (bx1, by1), (bx2, by2), color, -1)
 
